@@ -197,16 +197,81 @@ BikeSharing MLOps Pipeline
         return False
 
 
+def send_training_notification(status: str, reason: str = None, drift_score: str = None, deployed: str = None) -> bool:
+    """Send training completion notification."""
+    try:
+        # Determine status icon and color
+        if status.lower() in ['success', 'completed']:
+            status_icon = '✅'
+            status_color = 'green'
+            status_text = 'Successful'
+        elif status.lower() in ['failure', 'failed']:
+            status_icon = '❌'
+            status_color = 'red'
+            status_text = 'Failed'
+        else:
+            status_icon = '⚠️'
+            status_color = 'orange'
+            status_text = status.title()
+        
+        subject = f"{status_icon} Scheduled Model Training {status_text} - BikeSharing MLOps"
+        
+        # Create plain text body
+        body = f"""
+Scheduled Model Training {status_text}
+
+Training Details:
+- Status: {status_text}
+- Reason: {reason or 'Automated retraining'}
+- Drift Score: {drift_score or 'N/A'}
+- New Model Deployed: {deployed or 'N/A'}
+- Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+
+Best regards,
+BikeSharing MLOps Pipeline
+"""
+        
+        # Create HTML body
+        html_body = f"""
+<html>
+<head></head>
+<body>
+    <h2 style="color: {status_color};">{status_icon} Scheduled Model Training {status_text}</h2>
+    
+    <h3>Training Details</h3>
+    <ul>
+        <li><strong>Status:</strong> <span style="color: {status_color};">{status_text}</span></li>
+        <li><strong>Reason:</strong> {reason or 'Automated retraining'}</li>
+        <li><strong>Drift Score:</strong> {drift_score or 'N/A'}</li>
+        <li><strong>New Model Deployed:</strong> {deployed or 'N/A'}</li>
+        <li><strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
+    </ul>
+    
+    <p>Best regards,<br>BikeSharing MLOps Pipeline</p>
+</body>
+</html>
+"""
+        
+        return send_email(subject, body, html_body)
+        
+    except Exception as e:
+        logger.error(f"Error sending training notification: {e}")
+        return False
+
+
 def main():
     """Main function."""
     parser = argparse.ArgumentParser(description='Send email notifications for CI/CD pipeline')
-    parser.add_argument('--type', choices=['deployment', 'rollback'], 
+    parser.add_argument('--type', choices=['deployment', 'rollback', 'training'], 
                        required=True, help='Type of notification')
     parser.add_argument('--environment', default='staging', 
                        help='Deployment environment (staging/production)')
     parser.add_argument('--status', default='success', 
-                       help='Deployment status (success/failure)')
+                       help='Status (success/failure)')
     parser.add_argument('--commit', help='Commit SHA')
+    parser.add_argument('--reason', help='Training reason')
+    parser.add_argument('--drift-score', help='Data drift score')
+    parser.add_argument('--deployed', help='Whether new model was deployed')
     
     args = parser.parse_args()
     
@@ -220,6 +285,8 @@ def main():
         success = send_deployment_notification(args.environment, args.status, commit_sha)
     elif args.type == 'rollback':
         success = send_rollback_notification()
+    elif args.type == 'training':
+        success = send_training_notification(args.status, args.reason, args.drift_score, args.deployed)
     
     if success:
         logger.info("Notification sent successfully")
