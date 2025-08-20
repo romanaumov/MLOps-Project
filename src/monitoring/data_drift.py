@@ -24,9 +24,7 @@ logger = logging.getLogger(__name__)
 class DataDriftMonitor:
     def __init__(self, reference_data_path: Optional[str] = None):
         self.reference_data = None
-        self.monitoring_db_path = (
-            settings.PROJECT_ROOT / "monitoring" / "drift_data.db"
-        )
+        self.monitoring_db_path = settings.PROJECT_ROOT / "monitoring" / "drift_data.db"
         self.reports_dir = settings.PROJECT_ROOT / "monitoring" / "reports"
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -47,7 +45,8 @@ class DataDriftMonitor:
             cursor = conn.cursor()
 
             # Create predictions table
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS predictions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME,
@@ -66,10 +65,12 @@ class DataDriftMonitor:
                     prediction REAL,
                     actual REAL DEFAULT NULL
                 )
-            """)
+            """
+            )
 
             # Create drift reports table
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS drift_reports (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME,
@@ -78,7 +79,8 @@ class DataDriftMonitor:
                     drift_score REAL,
                     report_path TEXT
                 )
-            """)
+            """
+            )
 
             conn.commit()
 
@@ -92,9 +94,7 @@ class DataDriftMonitor:
                     f"Loaded reference data with shape: {self.reference_data.shape}"
                 )
             else:
-                logger.warning(
-                    "No reference data found. Please train a model first."
-                )
+                logger.warning("No reference data found. Please train a model first.")
         except Exception as e:
             logger.error(f"Error loading reference data: {e}")
 
@@ -159,7 +159,9 @@ class DataDriftMonitor:
                     SELECT * FROM predictions 
                     WHERE timestamp >= datetime('now', '-{} hours')
                     ORDER BY timestamp DESC
-                """.format(hours)
+                """.format(
+                    hours
+                )
 
                 df = pd.read_sql_query(query, conn)
                 df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -203,9 +205,7 @@ class DataDriftMonitor:
 
             # Save report
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            report_path = (
-                self.reports_dir / f"drift_report_{timestamp_str}.html"
-            )
+            report_path = self.reports_dir / f"drift_report_{timestamp_str}.html"
             report.save_html(str(report_path))
 
             # Extract drift results
@@ -318,9 +318,7 @@ class DataDriftMonitor:
                     TestNumberOfDriftedColumns(
                         lt=0.3
                     ),  # Less than 30% of columns should drift
-                    TestShareOfMissingValues(
-                        lt=0.1
-                    ),  # Less than 10% missing values
+                    TestShareOfMissingValues(lt=0.1),  # Less than 10% missing values
                 ]
             )
 
@@ -331,9 +329,7 @@ class DataDriftMonitor:
 
             # Save results
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            test_report_path = (
-                self.reports_dir / f"test_suite_{timestamp_str}.html"
-            )
+            test_report_path = self.reports_dir / f"test_suite_{timestamp_str}.html"
             test_suite.save_html(str(test_report_path))
 
             # Extract results
@@ -341,8 +337,7 @@ class DataDriftMonitor:
 
             return {
                 "tests_passed": all(
-                    test["status"] == "SUCCESS"
-                    for test in test_results["tests"]
+                    test["status"] == "SUCCESS" for test in test_results["tests"]
                 ),
                 "test_results": test_results,
                 "report_path": str(test_report_path),
@@ -388,38 +383,44 @@ class DataDriftMonitor:
             # Check if alert is needed
             alert_needed = (
                 drift_results["drift_detected"]
-                or drift_results["drift_score"]
-                > 0.3  # Alert if >30% of features drift
+                or drift_results["drift_score"] > 0.3  # Alert if >30% of features drift
             )
 
             if alert_needed:
-                alert_message = f"Data drift detected! Score: {drift_results['drift_score']:.3f}"
+                alert_message = (
+                    f"Data drift detected! Score: {drift_results['drift_score']:.3f}"
+                )
                 logger.warning(alert_message)
 
                 # Send email alert to admin@bikesharing.com
                 try:
-                    import subprocess
                     import json
-                    
+                    import subprocess
+
                     # Create alert data
                     alert_data = {
-                        'type': 'drift_alert',
-                        'drift_results': drift_results,
-                        'message': alert_message
+                        "type": "drift_alert",
+                        "drift_results": drift_results,
+                        "message": alert_message,
                     }
-                    
+
                     # Send email notification
-                    script_path = str(settings.PROJECT_ROOT / "scripts" / "send_drift_alert.py")
-                    result = subprocess.run([
-                        'python', script_path,
-                        '--data', json.dumps(alert_data)
-                    ], capture_output=True, text=True)
-                    
+                    script_path = str(
+                        settings.PROJECT_ROOT / "scripts" / "send_drift_alert.py"
+                    )
+                    result = subprocess.run(
+                        ["python", script_path, "--data", json.dumps(alert_data)],
+                        capture_output=True,
+                        text=True,
+                    )
+
                     if result.returncode == 0:
                         logger.info("Drift alert email sent successfully")
                     else:
-                        logger.error(f"Failed to send drift alert email: {result.stderr}")
-                        
+                        logger.error(
+                            f"Failed to send drift alert email: {result.stderr}"
+                        )
+
                 except Exception as e:
                     logger.error(f"Error sending drift alert email: {e}")
 

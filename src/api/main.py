@@ -1,15 +1,16 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
 import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-from datetime import datetime
 import uvicorn
+from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
-from src.models.predict import BikeSharePredictor
 from src.config import settings
+from src.models.predict import BikeSharePredictor
 from src.monitoring.data_drift import log_prediction_data
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Bike Sharing Demand Prediction API",
     description="API for predicting bike sharing demand using ML models",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add CORS middleware
@@ -33,9 +34,12 @@ app.add_middleware(
 # Initialize predictor
 predictor = BikeSharePredictor()
 
+
 # Pydantic models for request/response
 class PredictionInput(BaseModel):
-    season: int = Field(..., ge=1, le=4, description="Season (1:spring, 2:summer, 3:fall, 4:winter)")
+    season: int = Field(
+        ..., ge=1, le=4, description="Season (1:spring, 2:summer, 3:fall, 4:winter)"
+    )
     yr: int = Field(..., ge=0, le=1, description="Year (0: 2011, 1:2012)")
     mnth: int = Field(..., ge=1, le=12, description="Month (1-12)")
     hr: int = Field(..., ge=0, le=23, description="Hour (0-23)")
@@ -48,23 +52,28 @@ class PredictionInput(BaseModel):
     hum: float = Field(..., ge=0, le=1, description="Normalized humidity")
     windspeed: float = Field(..., ge=0, le=1, description="Normalized wind speed")
 
+
 class BatchPredictionInput(BaseModel):
     inputs: List[PredictionInput]
+
 
 class PredictionOutput(BaseModel):
     prediction: float
     timestamp: datetime
     model_version: Optional[str] = None
 
+
 class BatchPredictionOutput(BaseModel):
     predictions: List[float]
     timestamp: datetime
     model_version: Optional[str] = None
 
+
 class HealthResponse(BaseModel):
     status: str
     timestamp: datetime
     model_loaded: bool
+
 
 class ModelInfo(BaseModel):
     model_name: str
@@ -94,7 +103,7 @@ async def root():
     return {
         "message": "Bike Sharing Demand Prediction API",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 
@@ -102,9 +111,7 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now(),
-        model_loaded=predictor.is_loaded
+        status="healthy", timestamp=datetime.now(), model_loaded=predictor.is_loaded
     )
 
 
@@ -112,42 +119,41 @@ async def health_check():
 async def get_model_info():
     """Get information about the loaded model."""
     feature_importance = predictor.get_feature_importance()
-    
+
     return ModelInfo(
         model_name=predictor.model_name,
         model_stage=predictor.model_stage,
         is_loaded=predictor.is_loaded,
-        feature_importance=feature_importance
+        feature_importance=feature_importance,
     )
 
 
 @app.post("/predict", response_model=PredictionOutput)
 async def predict_single(
-    input_data: PredictionInput,
-    background_tasks: BackgroundTasks
+    input_data: PredictionInput, background_tasks: BackgroundTasks
 ):
     """Make a single prediction."""
     try:
         # Convert to dictionary
         data_dict = input_data.dict()
-        
+
         # Make prediction
         prediction = predictor.predict_single(**data_dict)
-        
+
         # Log prediction data for monitoring (async)
         background_tasks.add_task(
             log_prediction_data,
             input_data=data_dict,
             prediction=prediction,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
-        
+
         return PredictionOutput(
             prediction=prediction,
             timestamp=datetime.now(),
-            model_version=predictor.model_stage
+            model_version=predictor.model_stage,
         )
-        
+
     except Exception as e:
         logger.error(f"Error making prediction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -155,33 +161,32 @@ async def predict_single(
 
 @app.post("/predict/batch", response_model=BatchPredictionOutput)
 async def predict_batch(
-    input_data: BatchPredictionInput,
-    background_tasks: BackgroundTasks
+    input_data: BatchPredictionInput, background_tasks: BackgroundTasks
 ):
     """Make batch predictions."""
     try:
         # Convert to DataFrame
         data_list = [item.dict() for item in input_data.inputs]
         df = pd.DataFrame(data_list)
-        
+
         # Make predictions
         predictions = predictor.predict(df)
         predictions_list = predictions.tolist()
-        
+
         # Log batch prediction data for monitoring (async)
         background_tasks.add_task(
             log_prediction_data,
             input_data=data_list,
             prediction=predictions_list,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
-        
+
         return BatchPredictionOutput(
             predictions=predictions_list,
             timestamp=datetime.now(),
-            model_version=predictor.model_stage
+            model_version=predictor.model_stage,
         )
-        
+
     except Exception as e:
         logger.error(f"Error making batch prediction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -193,13 +198,13 @@ async def predict_with_confidence(input_data: PredictionInput):
     try:
         data_dict = input_data.dict()
         result = predictor.predict_with_confidence(data_dict)
-        
+
         return {
             **result,
             "timestamp": datetime.now(),
-            "model_version": predictor.model_stage
+            "model_version": predictor.model_stage,
         }
-        
+
     except Exception as e:
         logger.error(f"Error making prediction with confidence: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -214,7 +219,7 @@ async def reload_model():
             "message": "Model reloaded successfully",
             "timestamp": datetime.now(),
             "model_name": predictor.model_name,
-            "model_stage": predictor.model_stage
+            "model_stage": predictor.model_stage,
         }
     except Exception as e:
         logger.error(f"Error reloading model: {e}")
@@ -235,8 +240,5 @@ async def general_exception_handler(request, exc):
 
 if __name__ == "__main__":
     uvicorn.run(
-        "src.api.main:app",
-        host=settings.API_HOST,
-        port=settings.API_PORT,
-        reload=True
+        "src.api.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True
     )

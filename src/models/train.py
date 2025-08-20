@@ -46,9 +46,7 @@ class ModelTrainer:
 
         # Create experiment if it doesn't exist
         try:
-            experiment = mlflow.get_experiment_by_name(
-                settings.MLFLOW_EXPERIMENT_NAME
-            )
+            experiment = mlflow.get_experiment_by_name(settings.MLFLOW_EXPERIMENT_NAME)
             if experiment is None:
                 mlflow.create_experiment(settings.MLFLOW_EXPERIMENT_NAME)
         except Exception as e:
@@ -125,9 +123,7 @@ class ModelTrainer:
             model.fit(X_train, y_train)
 
             # Evaluate model
-            metrics = self.evaluate_model(
-                model, X_train, X_test, y_train, y_test
-            )
+            metrics = self.evaluate_model(model, X_train, X_test, y_train, y_test)
 
             # Log metrics
             mlflow.log_metrics(metrics)
@@ -148,9 +144,7 @@ class ModelTrainer:
             # Log artifacts
             mlflow.log_artifact(str(model_path))
 
-            logger.info(
-                f"Model {model_name} - Test RMSE: {metrics['test_rmse']:.4f}"
-            )
+            logger.info(f"Model {model_name} - Test RMSE: {metrics['test_rmse']:.4f}")
 
             return {
                 "model": model,
@@ -166,9 +160,7 @@ class ModelTrainer:
         self.setup_mlflow()
 
         # Load and preprocess data
-        X_train, X_test, y_train, y_test = (
-            self.preprocessor.preprocess_pipeline()
-        )
+        X_train, X_test, y_train, y_test = self.preprocessor.preprocess_pipeline()
 
         results = {}
         best_model = None
@@ -213,9 +205,7 @@ class ModelTrainer:
 
         return results
 
-    def register_best_model(
-        self, best_result: Dict[str, Any], model_name: str
-    ) -> None:
+    def register_best_model(self, best_result: Dict[str, Any], model_name: str) -> None:
         """Register the best model for production."""
         try:
             # Get the model URI
@@ -258,9 +248,7 @@ def main():
         print(f"  Test RMSE: {metrics['test_rmse']:.4f}")
         print(f"  Test MAE: {metrics['test_mae']:.4f}")
         print(f"  Test R²: {metrics['test_r2']:.4f}")
-        print(
-            f"  CV RMSE: {metrics['cv_rmse']:.4f} ± {metrics['cv_rmse_std']:.4f}"
-        )
+        print(f"  CV RMSE: {metrics['cv_rmse']:.4f} ± {metrics['cv_rmse_std']:.4f}")
         print()
 
 
