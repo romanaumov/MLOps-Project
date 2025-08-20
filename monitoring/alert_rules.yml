@@ -1,0 +1,86 @@
+groups:
+  - name: ml_model_alerts
+    rules:
+      # Model API health
+      - alert: ModelAPIDown
+        expr: up{job="bike-sharing-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model API is down"
+          description: "The bike sharing prediction API has been down for more than 1 minute."
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="bike-sharing-api",status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} requests per second for the API."
+
+      # MLflow server health
+      - alert: MLflowDown
+        expr: up{job="mlflow"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MLflow server is down"
+          description: "MLflow tracking server has been down for more than 2 minutes."
+
+      # Airflow scheduler health
+      - alert: AirflowSchedulerDown
+        expr: up{job="airflow"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Airflow is down"
+          description: "Airflow webserver has been down for more than 5 minutes."
+
+  - name: data_quality_alerts
+    rules:
+      # Data drift alert (this would be fed from custom metrics)
+      - alert: DataDriftDetected
+        expr: model_data_drift_score > 0.5
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data drift detected"
+          description: "Data drift score is {{ $value }}, indicating potential model degradation."
+
+      # Model performance degradation
+      - alert: ModelPerformanceDegraded
+        expr: model_rmse_current / model_rmse_baseline > 1.2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model performance degraded"
+          description: "Current RMSE is {{ $value }}x baseline, indicating performance degradation."
+
+  - name: system_alerts
+    rules:
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90% for more than 2 minutes."
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for more than 5 minutes."

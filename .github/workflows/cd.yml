@@ -1,0 +1,203 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: uv sync --dev
+    
+    - name: Run model training
+      run: |
+        uv run python src/models/train.py
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.STAGING_MLFLOW_URI }}
+    
+    - name: Validate model performance
+      run: |
+        uv run python scripts/validate_model.py
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.STAGING_MLFLOW_URI }}
+        MIN_R2_SCORE: 0.7
+        MAX_RMSE: 100.0
+    
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        # In a real scenario, this would deploy to staging infrastructure
+        # Examples:
+        # - Update Kubernetes deployments
+        # - Deploy to cloud services (AWS ECS, GCP Cloud Run, etc.)
+        # - Update load balancer configurations
+        # - Run smoke tests
+    
+    - name: Run smoke tests
+      run: |
+        uv run python tests/smoke_tests.py
+      env:
+        API_BASE_URL: ${{ secrets.STAGING_API_URL }}
+    
+    - name: Notify deployment
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#mlops'
+        text: 'Staging deployment completed for commit ${{ github.sha }}'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+      if: always()
+
+  deploy-production:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production
+    needs: []
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Extract version
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: uv sync --dev
+    
+    - name: Download and validate model
+      run: |
+        uv run python scripts/download_production_model.py
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.PRODUCTION_MLFLOW_URI }}
+        MODEL_NAME: ${{ secrets.MODEL_NAME }}
+        MODEL_STAGE: Production
+    
+    - name: Build and push Docker images
+      env:
+        DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        # Login to registry
+        echo ${{ secrets.DOCKER_PASSWORD }} | docker login $DOCKER_REGISTRY -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        
+        # Build and push API image
+        docker build -f docker/Dockerfile.api -t $DOCKER_REGISTRY/bike-sharing-api:$VERSION .
+        docker build -f docker/Dockerfile.api -t $DOCKER_REGISTRY/bike-sharing-api:latest .
+        docker push $DOCKER_REGISTRY/bike-sharing-api:$VERSION
+        docker push $DOCKER_REGISTRY/bike-sharing-api:latest
+        
+        # Build and push training image
+        docker build -f docker/Dockerfile.training -t $DOCKER_REGISTRY/bike-sharing-training:$VERSION .
+        docker push $DOCKER_REGISTRY/bike-sharing-training:$VERSION
+    
+    - name: Deploy to production
+      run: |
+        echo "Deploying version ${{ steps.version.outputs.version }} to production..."
+        # Production deployment steps would go here
+        # Examples:
+        # - Blue-green deployment
+        # - Rolling updates
+        # - Database migrations
+        # - Infrastructure updates
+    
+    - name: Run production health checks
+      run: |
+        uv run python tests/health_checks.py
+      env:
+        API_BASE_URL: ${{ secrets.PRODUCTION_API_URL }}
+        TIMEOUT: 300
+    
+    - name: Update monitoring
+      run: |
+        uv run python scripts/update_monitoring.py
+      env:
+        GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+        GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
+        VERSION: ${{ steps.version.outputs.version }}
+    
+    - name: Create GitHub release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        release_name: Release ${{ steps.version.outputs.version }}
+        body: |
+          ## Changes in ${{ steps.version.outputs.version }}
+          
+          - Model performance: RMSE < 50.0
+          - New features and improvements
+          - Bug fixes and optimizations
+          
+          ## Deployment Information
+          
+          - Docker image: `bike-sharing-api:${{ steps.version.outputs.version }}`
+          - Deployed to production at: $(date)
+        draft: false
+        prerelease: false
+    
+    - name: Notify production deployment
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#mlops'
+        text: |
+          🚀 Production deployment completed!
+          Version: ${{ steps.version.outputs.version }}
+          Commit: ${{ github.sha }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+      if: always()
+
+  rollback:
+    if: failure()
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    environment: production
+    
+    steps:
+    - name: Rollback production deployment
+      run: |
+        echo "Rolling back production deployment..."
+        # Rollback steps would go here
+        # Examples:
+        # - Revert to previous Docker image
+        # - Rollback database migrations
+        # - Update load balancer to previous version
+    
+    - name: Notify rollback
+      uses: 8398a7/action-slack@v3
+      with:
+        status: 'failure'
+        channel: '#mlops'
+        text: '🔄 Production rollback initiated due to deployment failure'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

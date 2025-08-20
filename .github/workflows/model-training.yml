@@ -1,0 +1,127 @@
+name: Scheduled Model Training
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      retrain_reason:
+        description: 'Reason for retraining'
+        required: true
+        default: 'Manual retrain'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  check-data-drift:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_retraining: ${{ steps.drift-check.outputs.needs_retraining }}
+      drift_score: ${{ steps.drift-check.outputs.drift_score }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: uv sync --dev
+    
+    - name: Check for data drift
+      id: drift-check
+      run: |
+        uv run python scripts/check_drift.py
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        DRIFT_THRESHOLD: 0.3
+
+  retrain-model:
+    needs: check-data-drift
+    if: needs.check-data-drift.outputs.needs_retraining == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: uv sync --dev
+    
+    - name: Download latest data
+      run: |
+        uv run python scripts/download_latest_data.py
+      env:
+        DATA_SOURCE_URL: ${{ secrets.DATA_SOURCE_URL }}
+    
+    - name: Train new model
+      run: |
+        uv run python src/models/train.py
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MLFLOW_EXPERIMENT_NAME: scheduled_training
+    
+    - name: Validate new model
+      id: validate
+      run: |
+        uv run python scripts/validate_new_model.py
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        BASELINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+    
+    - name: Deploy if better
+      if: steps.validate.outputs.deploy == 'true'
+      run: |
+        uv run python scripts/deploy_new_model.py
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MODEL_NAME: ${{ secrets.MODEL_NAME }}
+    
+    - name: Notify training results
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#mlops'
+        text: |
+          📊 Scheduled model training completed
+          Reason: ${{ github.event.inputs.retrain_reason || 'Automated retraining' }}
+          Drift Score: ${{ needs.check-data-drift.outputs.drift_score }}
+          New Model Deployed: ${{ steps.validate.outputs.deploy }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+      if: always()
+
+  no-retraining-needed:
+    needs: check-data-drift
+    if: needs.check-data-drift.outputs.needs_retraining == 'false'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Log no retraining needed
+      run: |
+        echo "No retraining needed. Drift score: ${{ needs.check-data-drift.outputs.drift_score }}"
+    
+    - name: Notify no retraining
+      uses: 8398a7/action-slack@v3
+      with:
+        status: 'success'
+        channel: '#mlops'
+        text: |
+          ✅ Scheduled training check completed
+          No retraining needed (drift score: ${{ needs.check-data-drift.outputs.drift_score }})
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

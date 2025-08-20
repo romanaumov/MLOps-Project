@@ -1,0 +1,40 @@
+# Docker image for training pipeline
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r mluser && useradd -r -g mluser mluser
+
+# Set work directory
+WORKDIR /app
+
+# Copy requirements and install dependencies
+COPY pyproject.toml ./
+RUN pip install -e ".[dev]"
+
+# Copy application code
+COPY src/ ./src/
+COPY data/ ./data/
+COPY scripts/ ./scripts/
+
+# Create necessary directories
+RUN mkdir -p models logs mlruns monitoring/reports && \
+    chown -R mluser:mluser /app
+
+# Switch to non-root user
+USER mluser
+
+# Default command
+CMD ["python", "src/models/train.py"]
