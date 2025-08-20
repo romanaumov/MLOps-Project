@@ -60,7 +60,13 @@ jobs:
     
     - name: Notify deployment
       run: |
+        # Try main notification script first, fallback to simple one
         uv run python scripts/send_notification.py \
+          --type deployment \
+          --environment staging \
+          --status ${{ job.status }} \
+          --commit ${{ github.sha }} || \
+        uv run python scripts/simple_notification.py \
           --type deployment \
           --environment staging \
           --status ${{ job.status }} \
@@ -169,7 +175,13 @@ jobs:
     
     - name: Notify production deployment
       run: |
+        # Try main notification script first, fallback to simple one
         uv run python scripts/send_notification.py \
+          --type deployment \
+          --environment production \
+          --status ${{ job.status }} \
+          --commit ${{ github.sha }} || \
+        uv run python scripts/simple_notification.py \
           --type deployment \
           --environment production \
           --status ${{ job.status }} \
@@ -199,7 +211,10 @@ jobs:
     
     - name: Notify rollback
       run: |
+        # Try main notification script first, fallback to simple one
         uv run python scripts/send_notification.py \
+          --type rollback || \
+        uv run python scripts/simple_notification.py \
           --type rollback
       env:
         SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
