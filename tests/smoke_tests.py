@@ -29,7 +29,19 @@ class SmokeTestRunner:
     """Smoke test runner for deployed API."""
     
     def __init__(self, base_url=None, timeout=30):
-        self.base_url = base_url or os.getenv('API_BASE_URL', 'http://localhost:8000')
+        # Get base URL from parameter, environment, or default
+        if base_url:
+            self.base_url = base_url
+        else:
+            env_url = os.getenv('API_BASE_URL', '').strip()
+            if env_url and not env_url.startswith(('http://', 'https://')):
+                # If URL doesn't have scheme, assume http
+                env_url = f'http://{env_url}'
+            self.base_url = env_url or 'http://localhost:8000'
+        
+        # Ensure base_url doesn't end with slash
+        self.base_url = self.base_url.rstrip('/')
+        
         self.timeout = timeout
         self.session = requests.Session()
         
@@ -188,8 +200,16 @@ class SmokeTestRunner:
 def main():
     """Main function."""
     # Get configuration from environment
-    api_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
+    api_url = os.getenv('API_BASE_URL', '').strip()
     timeout = int(os.getenv('TIMEOUT', '30'))
+    
+    # Handle empty or missing API URL
+    if not api_url:
+        logger.warning("API_BASE_URL environment variable not set, using default: http://localhost:8000")
+        api_url = 'http://localhost:8000'
+    
+    logger.info(f"API URL: {api_url}")
+    logger.info(f"Timeout: {timeout}s")
     
     # Wait for API to be ready
     logger.info("Waiting for API to be ready...")

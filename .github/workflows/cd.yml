@@ -54,9 +54,16 @@ jobs:
     
     - name: Run smoke tests
       run: |
+        # Set API URL with fallback to localhost if secret not available
+        export API_BASE_URL="${{ secrets.STAGING_API_URL }}"
+        if [ -z "$API_BASE_URL" ]; then
+          echo "STAGING_API_URL secret not set, using localhost"
+          export API_BASE_URL="http://localhost:8000"
+        fi
+        echo "Testing API at: $API_BASE_URL"
         uv run python tests/smoke_tests.py
       env:
-        API_BASE_URL: ${{ secrets.STAGING_API_URL }}
+        API_BASE_URL: ${{ secrets.STAGING_API_URL || 'http://localhost:8000' }}
     
     - name: Notify deployment
       run: |
