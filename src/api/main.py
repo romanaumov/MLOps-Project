@@ -171,9 +171,9 @@ async def predict_batch(
 
         # Make predictions
         predictions = predictor.predict(df)
-        
+
         # Handle both numpy arrays and plain lists
-        if hasattr(predictions, 'tolist'):
+        if hasattr(predictions, "tolist"):
             predictions_list = predictions.tolist()
         else:
             predictions_list = list(predictions)
