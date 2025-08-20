@@ -131,7 +131,8 @@ This MLOps project implements a complete production-ready machine learning pipel
 - **Containerized Deployment**: Docker Compose with multi-service architecture
 - **API Development**: FastAPI with automatic documentation and validation
 - **Monitoring & Alerting**: Evidently for drift detection, Grafana/Prometheus for observability
-- **CI/CD Automation**: GitHub Actions with automated testing and deployment
+- **CI/CD Automation**: GitHub Actions with automated testing, deployment, and email notifications
+- **Email Notifications**: Automated email alerts for deployments, model training, and drift detection
 
 ### ✅ **Quality Assurance & Best Practices**
 - **Testing**: Unit tests, integration tests, and coverage reporting
@@ -186,6 +187,11 @@ MLOps-Project/
 │   ├── models/                   # ML model training/prediction
 │   ├── monitoring/               # Monitoring and drift detection
 │   └── config.py                 # Configuration management
+├── scripts/                      # Utility scripts
+│   ├── validate_model.py         # Model validation for CI/CD
+│   ├── send_notification.py      # Email notifications for deployments
+│   ├── send_drift_alert.py       # Email alerts for data drift
+│   └── download_production_model.py # Production model download
 ├── data/                         # Data storage
 │   ├── raw/                      # Original dataset
 │   └── processed/                # Processed features
@@ -196,6 +202,8 @@ MLOps-Project/
 │   ├── grafana/                  # Dashboard definitions
 │   └── prometheus.yml            # Metrics collection
 ├── tests/                        # Test suite
+│   ├── smoke_tests.py            # Deployment smoke tests
+│   └── health_checks.py          # Production health checks
 ├── .github/workflows/            # CI/CD pipelines
 ├── docker-compose.yml            # Service orchestration
 ├── Makefile                      # Development commands
@@ -428,6 +436,125 @@ print(f"Batch predictions: {response.json()['predictions']}")
    - Adjust monitoring frequency based on traffic
    - Use sampling for high-volume prediction logging
    - Implement alerting thresholds based on business requirements
+
+## Email Notification System
+
+The project includes a comprehensive email notification system that sends alerts to `admin@bikesharing.com` for various MLOps events.
+
+### Notification Types
+
+1. **Deployment Notifications**
+   - Staging deployment completion
+   - Production deployment success/failure
+   - Rollback notifications
+
+2. **Model Training Notifications**
+   - Training pipeline completion
+   - Model validation results
+   - Performance metrics summary
+
+3. **Data Drift Alerts**
+   - Drift detection warnings
+   - Feature distribution changes
+   - Model performance degradation
+
+### Configuration
+
+Email notifications require SMTP configuration via environment variables:
+
+```bash
+# SMTP Configuration
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=mlops@bikesharing.com
+SMTP_PASSWORD=your-app-password
+SENDER_EMAIL=mlops@bikesharing.com
+```
+
+### CI/CD Integration
+
+The GitHub Actions workflows automatically send email notifications:
+
+```yaml
+# Example from .github/workflows/cd.yml
+- name: Notify deployment
+  run: |
+    uv run python scripts/send_notification.py \
+      --type deployment \
+      --environment staging \
+      --status ${{ job.status }} \
+      --commit ${{ github.sha }}
+  env:
+    SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+    SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+    SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+```
+
+### Manual Notification Testing
+
+```bash
+# Test deployment notification
+uv run python scripts/send_notification.py \
+  --type deployment \
+  --environment staging \
+  --status success \
+  --commit abc123
+
+# Test drift alert
+uv run python scripts/send_drift_alert.py \
+  --data '{"drift_results": {"drift_detected": true, "drift_score": 0.4}}'
+```
+
+## CI/CD Pipeline
+
+The project includes comprehensive CI/CD pipelines with automated testing, deployment, and notifications.
+
+### Pipeline Structure
+
+1. **CI Pipeline** (`.github/workflows/ci.yml`)
+   - Code quality checks (linting, formatting, type checking)
+   - Unit and integration tests
+   - Coverage reporting
+
+2. **CD Pipeline** (`.github/workflows/cd.yml`)
+   - Model validation
+   - Staging deployment with smoke tests
+   - Production deployment with health checks
+   - Email notifications for all events
+
+### Pipeline Scripts
+
+The CI/CD pipeline uses several utility scripts:
+
+- `scripts/validate_model.py` - Validates model performance against thresholds
+- `scripts/download_production_model.py` - Downloads models from MLflow registry
+- `tests/smoke_tests.py` - Basic functionality tests for deployed API
+- `tests/health_checks.py` - Comprehensive production health validation
+
+### GitHub Secrets Configuration
+
+Configure the following secrets in your GitHub repository:
+
+```
+# MLflow Configuration
+STAGING_MLFLOW_URI=http://your-staging-mlflow.com
+PRODUCTION_MLFLOW_URI=http://your-production-mlflow.com
+
+# API Endpoints
+STAGING_API_URL=http://your-staging-api.com
+PRODUCTION_API_URL=http://your-production-api.com
+
+# Email Configuration
+SMTP_SERVER=smtp.gmail.com
+SMTP_USERNAME=mlops@bikesharing.com
+SMTP_PASSWORD=your-app-password
+SENDER_EMAIL=mlops@bikesharing.com
+
+# Docker Registry (optional)
+DOCKER_REGISTRY=your-registry.com
+DOCKER_USERNAME=your-username
+DOCKER_PASSWORD=your-password
+```
 
 
 ## Evaluation Criteria

@@ -396,11 +396,32 @@ class DataDriftMonitor:
                 alert_message = f"Data drift detected! Score: {drift_results['drift_score']:.3f}"
                 logger.warning(alert_message)
 
-                # Here you could integrate with alerting systems like:
-                # - Slack notifications
-                # - Email alerts
-                # - PagerDuty
-                # - Webhook calls
+                # Send email alert to admin@bikesharing.com
+                try:
+                    import subprocess
+                    import json
+                    
+                    # Create alert data
+                    alert_data = {
+                        'type': 'drift_alert',
+                        'drift_results': drift_results,
+                        'message': alert_message
+                    }
+                    
+                    # Send email notification
+                    script_path = str(settings.PROJECT_ROOT / "scripts" / "send_drift_alert.py")
+                    result = subprocess.run([
+                        'python', script_path,
+                        '--data', json.dumps(alert_data)
+                    ], capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        logger.info("Drift alert email sent successfully")
+                    else:
+                        logger.error(f"Failed to send drift alert email: {result.stderr}")
+                        
+                except Exception as e:
+                    logger.error(f"Error sending drift alert email: {e}")
 
                 return {
                     "status": "alert",

@@ -59,13 +59,17 @@ jobs:
         API_BASE_URL: ${{ secrets.STAGING_API_URL }}
     
     - name: Notify deployment
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        channel: '#mlops'
-        text: 'Staging deployment completed for commit ${{ github.sha }}'
+      run: |
+        uv run python scripts/send_notification.py \
+          --type deployment \
+          --environment staging \
+          --status ${{ job.status }} \
+          --commit ${{ github.sha }}
       env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
       if: always()
 
   deploy-production:
@@ -165,16 +169,17 @@ jobs:
         prerelease: false
     
     - name: Notify production deployment
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        channel: '#mlops'
-        text: |
-          🚀 Production deployment completed!
-          Version: ${{ steps.version.outputs.version }}
-          Commit: ${{ github.sha }}
+      run: |
+        uv run python scripts/send_notification.py \
+          --type deployment \
+          --environment production \
+          --status ${{ job.status }} \
+          --commit ${{ github.sha }}
       env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
       if: always()
 
   rollback:
@@ -194,10 +199,11 @@ jobs:
         # - Update load balancer to previous version
     
     - name: Notify rollback
-      uses: 8398a7/action-slack@v3
-      with:
-        status: 'failure'
-        channel: '#mlops'
-        text: '🔄 Production rollback initiated due to deployment failure'
+      run: |
+        uv run python scripts/send_notification.py \
+          --type rollback
       env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}

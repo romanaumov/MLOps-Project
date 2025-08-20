@@ -199,27 +199,42 @@ def deploy_model(**context):
 
 
 def send_training_notification(**context):
-    """Send notification about training completion."""
+    """Send email notification about training completion."""
     logger.info("Sending training notification...")
     
-    # Get results from previous tasks
-    training_summary = context['task_instance'].xcom_pull(task_ids='train_models')
-    validation_result = context['task_instance'].xcom_pull(task_ids='validate_model_performance')
-    deployment_info = context['task_instance'].xcom_pull(task_ids='deploy_model')
-    
-    notification_message = f"""
-    🚀 Model Training Pipeline Completed
-    
-    Best Model: {training_summary['best_model']}
-    Performance: RMSE {validation_result['rmse']:.4f}
-    Deployment: {deployment_info['deployment_time']}
-    
-    Models Trained: {', '.join(training_summary['models_trained'])}
-    """
-    
-    # In a real system, send to Slack, email, etc.
-    logger.info(f"Training notification: {notification_message}")
-    return {'notification_sent': True}
+    try:
+        # Get results from previous tasks
+        training_summary = context['task_instance'].xcom_pull(task_ids='train_models')
+        validation_result = context['task_instance'].xcom_pull(task_ids='validate_model_performance')
+        deployment_info = context['task_instance'].xcom_pull(task_ids='deploy_model')
+        
+        # Import email notification utility
+        import subprocess
+        import json
+        
+        # Create notification data
+        notification_data = {
+            'training_summary': training_summary,
+            'validation_result': validation_result,
+            'deployment_info': deployment_info
+        }
+        
+        # Send email notification using script
+        result = subprocess.run([
+            'python', '/opt/airflow/dags/scripts/send_training_email.py',
+            '--data', json.dumps(notification_data)
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            logger.info("Training notification email sent successfully")
+            return {'notification_sent': True}
+        else:
+            logger.error(f"Failed to send email notification: {result.stderr}")
+            return {'notification_sent': False}
+            
+    except Exception as e:
+        logger.error(f"Error sending training notification: {e}")
+        return {'notification_sent': False}
 
 
 # Task definitions
