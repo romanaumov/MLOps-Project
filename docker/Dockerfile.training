@@ -21,7 +21,7 @@ RUN groupadd -r mluser && useradd -r -g mluser mluser
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN pip install -e ".[dev]"
 
 # Copy application code
