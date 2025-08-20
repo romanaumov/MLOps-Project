@@ -468,12 +468,3 @@ print(f"Batch predictions: {response.json()['predictions']}")
     * ✅ There are pre-commit hooks (1 point)
     * ✅ There's a CI/CD pipeline (2 points)
 
-
-## Resources
-
-### Datasets
-
-Refer to the provided [datasets](https://github.com/DataTalksClub/data-engineering-zoomcamp/blob/main/projects/datasets.md) for possible selection.
-
-
-
