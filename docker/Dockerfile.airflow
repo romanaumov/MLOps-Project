@@ -29,14 +29,14 @@ RUN pip install --no-cache-dir \
 COPY airflow/dags /opt/airflow/dags
 COPY src /opt/airflow/dags/src
 
-# Initialize Airflow database (will be overridden by docker-compose command)
-RUN airflow db init
+# Copy and set up entrypoint script
+USER root
+COPY docker/airflow-entrypoint.sh /opt/airflow/airflow-entrypoint.sh
+RUN chmod +x /opt/airflow/airflow-entrypoint.sh
+USER airflow
 
-# Create admin user
-RUN airflow users create \
-    --username admin \
-    --firstname Admin \
-    --lastname User \
-    --role Admin \
-    --email admin@example.com \
-    --password admin
+# Ensure PATH includes airflow installation
+ENV PATH="/home/airflow/.local/bin:$PATH"
+
+# Set entrypoint
+ENTRYPOINT ["/opt/airflow/airflow-entrypoint.sh"]
