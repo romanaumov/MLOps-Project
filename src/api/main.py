@@ -171,7 +171,12 @@ async def predict_batch(
 
         # Make predictions
         predictions = predictor.predict(df)
-        predictions_list = predictions.tolist()
+        
+        # Handle both numpy arrays and plain lists
+        if hasattr(predictions, 'tolist'):
+            predictions_list = predictions.tolist()
+        else:
+            predictions_list = list(predictions)
 
         # Log batch prediction data for monitoring (async)
         background_tasks.add_task(
