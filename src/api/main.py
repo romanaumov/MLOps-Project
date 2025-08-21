@@ -119,14 +119,11 @@ async def health_check():
 async def get_metrics():
     """Prometheus metrics endpoint."""
     from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-    
+
     # Generate Prometheus metrics
     metrics_data = generate_latest()
-    
-    return Response(
-        content=metrics_data,
-        media_type=CONTENT_TYPE_LATEST
-    )
+
+    return Response(content=metrics_data, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/model/info", response_model=ModelInfo)
