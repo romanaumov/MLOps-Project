@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -112,6 +112,20 @@ async def health_check():
     """Health check endpoint."""
     return HealthResponse(
         status="healthy", timestamp=datetime.now(), model_loaded=predictor.is_loaded
+    )
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """Prometheus metrics endpoint."""
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    
+    # Generate Prometheus metrics
+    metrics_data = generate_latest()
+    
+    return Response(
+        content=metrics_data,
+        media_type=CONTENT_TYPE_LATEST
     )
 
 
